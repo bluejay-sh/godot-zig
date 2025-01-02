@@ -21,6 +21,8 @@ var cwd: std.fs.Dir = undefined;
 const func_case: case.Case = .camel;
 var func_name_map: StringStringMap = undefined;
 
+const GenerateGodotBindingsError = error{OperatorDoesNotExist};
+
 const keywords = std.StaticStringMap(void).initComptime(.{
     .{"addrspace"},
     .{"align"},
@@ -120,6 +122,56 @@ const native_type_map = std.StaticStringMap(void).initComptime(.{
     .{"Vector4i"},
 });
 
+const operator_name_map = std.StaticStringMap(string).initComptime(.{
+    // Comparison
+    .{ "==", "equal" },
+    .{ "!=", "not equal" },
+    .{ "<", "less" },
+    .{ "<=", "less equal" },
+    .{ ">", "greater" },
+    .{ ">=", "greater equal" },
+    // Mathematic
+    .{ "+", "add" },
+    .{ "-", "subtract" },
+    .{ "*", "multiply" },
+    .{ "/", "divide" },
+    .{ "unary-", "negative" },
+    .{ "unary+", "positive" },
+    .{ "%", "module" },
+    .{ "**", "power" },
+    // Bitwise
+    .{ "<<", "shift left" },
+    .{ ">>", "shift right" },
+    .{ "&", "bit and" },
+    .{ "|", "bit or" },
+    .{ "~", "bit negate" },
+    // Logic
+    .{ "and", "and" },
+    .{ "or", "or" },
+    .{ "not", "not" },
+    // Containment
+    .{ "in", "in" },
+});
+
+const zig_operator_name_override_map = std.StaticStringMap(string).initComptime(.{
+    // Comparison
+    .{ "==", "equals" },
+    .{ "!=", "notEqual" },
+    .{ "<", "lessThan" },
+    .{ "<=", "lessOrEqual" },
+    .{ ">", "greaterThan" },
+    .{ ">=", "greaterOrEqual" },
+    // Mathematic
+    .{ "+", "add" },
+    .{ "-", "sub" },
+    .{ "*", "mul" },
+    .{ "/", "div" },
+    .{ "unary-", "neg" },
+    .{ "unary+", "abs" },
+    .{ "%", "mod" },
+    .{ "**", "pow" },
+});
+
 var singletons_map: StringStringMap = undefined;
 var all_classes: std.ArrayList(string) = undefined;
 var all_engine_classes: std.ArrayList(string) = undefined;
@@ -127,6 +179,10 @@ var depends: std.ArrayList(string) = undefined;
 
 pub fn toSnakeCase(in: []const u8, buf: []u8) []const u8 {
     return case.bufTo(buf, .snake, in) catch @panic("toSnakeCase failed");
+}
+
+pub fn toCamelCase(in: []const u8, buf: []u8) []const u8 {
+    return case.bufTo(buf, .camel, in) catch @panic("toCamelCase failed");
 }
 
 fn parseClassSizes(api: anytype, conf_name: string) !void {
@@ -206,10 +262,16 @@ fn getEnumName(type_name: string) string {
     }
 }
 
+fn getOperatorEnumName(operator_name: string) !string {
+    var buf: [256]u8 = undefined;
+    //const nnn = toSnakeCase(operator_name_map.get(operator_name).?, &buf);
+    return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_OP_{s}", .{std.ascii.upperString(&buf, operator_name)}) catch unreachable;
+}
+
 fn getVariantTypeName(class_name: string) string {
     var buf: [256]u8 = undefined;
-    const nnn = toSnakeCase(class_name, &buf);
-    return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_TYPE_{s}", .{std.ascii.upperString(&buf, nnn)}) catch unreachable;
+    //const nnn = toSnakeCase(class_name, &buf);
+    return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_TYPE_{s}", .{std.ascii.upperString(&buf, class_name)}) catch unreachable;
 }
 
 fn addDependType(type_name: string) !void {
@@ -334,6 +396,13 @@ fn hasAnyMethod(class_node: anytype) bool {
     return false;
 }
 
+fn hasAnyOperator(class_node: anytype) bool {
+    if (@hasField(@TypeOf(class_node), "operators")) {
+        if (class_node.operators.len > 0) return true;
+    }
+    return false;
+}
+
 fn getArgumentsTypes(fn_node: anytype, buf: []u8) string {
     var pos: usize = 0;
     if (@hasField(@TypeOf(fn_node), "arguments")) {
@@ -370,10 +439,10 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
         var buf: [256]u8 = undefined;
         const atypes = getArgumentsTypes(fn_node, &buf);
         if (atypes.len > 0) {
-            const temp_atypes_func_name = try temp_buf.bufPrint("{s}_from_{s}", .{func_name, atypes});
+            const temp_atypes_func_name = try temp_buf.bufPrint("{s}_from_{s}", .{ func_name, atypes });
             const atypes_func_name = getZigFuncName(allocator, temp_atypes_func_name);
 
-            try code_builder.print(0, "pub fn {s}(", .{ atypes_func_name });
+            try code_builder.print(0, "pub fn {s}(", .{atypes_func_name});
         } else {
             try code_builder.print(0, "pub fn {s}(", .{zig_func_name});
         }
@@ -716,7 +785,7 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
             const temp_virtual_inherits_func_name = try std.fmt.allocPrint(allocator, "get_virtual_{s}", .{class_node.inherits});
             const virtual_inherits_func_name = getZigFuncName(allocator, temp_virtual_inherits_func_name);
 
-            try code_builder.printLine(1, "return Godot.{s}.{s}(T, p_userdata, p_name);", .{class_node.inherits, virtual_inherits_func_name});
+            try code_builder.printLine(1, "return Godot.{s}.{s}(T, p_userdata, p_name);", .{ class_node.inherits, virtual_inherits_func_name });
         } else {
             try code_builder.writeLine(1, "_ = T;");
             try code_builder.writeLine(1, "_ = p_userdata;");
@@ -790,6 +859,40 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
     //             result.add "proc `" & origName & "=`*(this:var " & className &
     //                     ", v:" & typeStr & ")=\n"
     //             result.add fmt"""  methodBindings{className}.member_{origName}_setter(this.opaque.addr, v.opaque.addr){'\n'}"""
+}
+
+fn generateOperator(class_node: anytype, code_builder: anytype, allocator: mem.Allocator, generated_method_map: *StringVoidMap) !void {
+    const class_name = correctName(class_node.name);
+    const enum_type_name = getVariantTypeName(class_name);
+
+    for (class_node.operators) |op| {
+        if (op.right_type.len != 0) {
+            const op_enum_name = try getOperatorEnumName(op.name);
+            const return_type = correctType(op.return_type, "");
+            const right_type = correctType(op.right_type, "");
+
+            const zig_op_name = try getZigOpName(allocator, op.name, class_name, right_type);
+            const method_map_name = try temp_buf.bufPrint("{s}_{s}", .{ class_name, zig_op_name });
+
+            if (!generated_method_map.contains(method_map_name)) {
+                try code_builder.printLine(0, "pub fn {s}(self: Self, arg_right: {s}) {s} {{", .{ zig_op_name, right_type, return_type });
+                try code_builder.printLine(1, "var result:{s} = undefined;", .{return_type});
+
+                try code_builder.writeLine(1, "const Binding = struct{ pub var method:Godot.GDExtensionPtrOperatorEvaluator = null; };");
+                try code_builder.writeLine(1, "if( Binding.method == null ) {");
+                try code_builder.printLine(2, "Binding.method = Godot.variantGetPtrOperatorEvaluator({s}, {s}, {s});", .{ op_enum_name, enum_type_name, getVariantTypeName(op.right_type) });
+                try code_builder.writeLine(1, "}");
+
+                try code_builder.writeLine(1, "Binding.method.?(@ptrCast(&self.value), @ptrCast(&arg_right), @ptrCast(&result));");
+                try code_builder.writeLine(1, "return result;");
+                try code_builder.writeLine(0, "}");
+
+                try generated_method_map.putNoClobber(method_map_name, {});
+                try addDependType(return_type);
+                try addDependType(right_type);
+            }
+        }
+    }
 }
 
 fn addImports(class_name: []const u8, code_builder: anytype, allocator: std.mem.Allocator) ![]const u8 {
@@ -932,6 +1035,10 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
             try generateMethod(bc, code_builder, allocator, is_builtin_class, &generated_method_map);
         }
 
+        if (is_builtin_class and hasAnyOperator(bc)) {
+            try generateOperator(bc, code_builder, allocator, &generated_method_map);
+        }
+
         if (false) {
             const callbacks_code =
                 \\pub var callbacks_{0s} = Godot.GDExtensionInstanceBindingCallbacks{{ .create_callback = instanceBindingCreateCallback, .free_callback = instanceBindingFreeCallback, .reference_callback = instanceBindingReferenceCallback }};
@@ -1063,6 +1170,30 @@ fn getZigFuncName(allocator: Allocator, godot_func_name: []const u8) []const u8 
     }
 
     return result.value_ptr.*;
+}
+
+fn getZigOpName(allocator: Allocator, operator_name: string, left_type: string, right_type: string) !string {
+    var op_prefix: []const u8 = undefined;
+    if (zig_operator_name_override_map.has(operator_name)) {
+        op_prefix = zig_operator_name_override_map.get(operator_name).?;
+    } else if (operator_name_map.has(operator_name)) {
+        op_prefix = operator_name_map.get(operator_name).?;
+    } else {
+        return GenerateGodotBindingsError.OperatorDoesNotExist;
+    }
+
+    op_prefix = try case.allocTo(allocator, func_case, op_prefix);
+
+    var op_suffix: []const u8 = "";
+    if (std.mem.eql(u8, right_type, correctType("int", ""))) {
+        op_suffix = try temp_buf.bufPrint("i", .{});
+    } else if (std.mem.eql(u8, right_type, correctType("float", ""))) {
+        op_suffix = try temp_buf.bufPrint("f", .{});
+    } else if (!std.mem.eql(u8, left_type, right_type)) {
+        op_suffix = try temp_buf.bufPrint("{s}", .{right_type});
+    }
+
+    return try temp_buf.bufPrint("{s}{s}", .{ op_prefix, op_suffix });
 }
 
 pub fn main() !void {
