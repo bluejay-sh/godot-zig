@@ -56,6 +56,16 @@ pub fn VecMethods(comptime T: type, comptime N: u8, comptime Self: type) type {
             return @reduce(.Add, self.asSimd() * self.asSimd());
         }
 
+        pub fn dist(self: Self, other: Self) real_t {
+            const dif = other.asSimd() - self.asSimd();
+            return @sqrt(@reduce(.Add, dif * dif));
+        }
+
+        pub fn dist2(self: Self, other: Self) real_t {
+            const dif = other.asSimd() - self.asSimd();
+            return @reduce(.Add, dif * dif);
+        }
+
         pub fn dot(self: Self, other: Self) T {
             return @reduce(.Add, self.asSimd() * other.asSimd());
         }
