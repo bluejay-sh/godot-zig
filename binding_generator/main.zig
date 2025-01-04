@@ -264,8 +264,8 @@ fn getEnumName(type_name: string) string {
 
 fn getOperatorEnumName(operator_name: string) !string {
     var buf: [256]u8 = undefined;
-    //const nnn = toSnakeCase(operator_name_map.get(operator_name).?, &buf);
-    return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_OP_{s}", .{std.ascii.upperString(&buf, operator_name_map.get(operator_name).?)}) catch unreachable;
+    const nnn = toSnakeCase(operator_name_map.get(operator_name).?, &buf);
+    return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_OP_{s}", .{std.ascii.upperString(&buf, nnn)}) catch unreachable;
 }
 
 fn getVariantTypeName(class_name: string) string {
@@ -330,6 +330,26 @@ fn correctType(type_name: string, meta: string) string {
     } else if (correct_type[correct_type.len - 1] == '*') {
         return temp_buf.bufPrint("?*{s}", .{correct_type[0 .. correct_type.len - 1]}) catch unreachable;
     }
+    return correct_type;
+}
+
+fn correctTypeSimple(type_name: string, meta: string) string {
+    const correct_type = if (meta.len > 0) meta else type_name;
+    if (correct_type.len == 0) return "void";
+
+    if (mem.eql(u8, correct_type, "float")) {
+        return "f64";
+    } else if (mem.eql(u8, correct_type, "int")) {
+        return "i64";
+    } else if (mem.eql(u8, correct_type, "Nil")) {
+        return "Variant";
+    } else if (base_type_map.has(correct_type)) {
+        return base_type_map.get(correct_type).?;
+    } else if (mem.startsWith(u8, correct_type, "typedarray::")) {
+        //simplified to just use array instead
+        return "Array";
+    }
+
     return correct_type;
 }
 
@@ -868,8 +888,8 @@ fn generateOperator(class_node: anytype, code_builder: anytype, allocator: mem.A
     for (class_node.operators) |op| {
         if (op.right_type.len != 0) {
             const op_enum_name = try getOperatorEnumName(op.name);
-            const return_type = correctType(op.return_type, "");
-            const right_type = correctType(op.right_type, "");
+            const return_type = correctTypeSimple(op.return_type, "");
+            const right_type = correctTypeSimple(op.right_type, "");
 
             const zig_op_name = try getZigOpName(allocator, op.name, class_name, right_type);
             const method_map_name = try temp_buf.bufPrint("{s}_{s}", .{ class_name, zig_op_name });
