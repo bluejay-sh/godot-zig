@@ -264,8 +264,8 @@ fn getEnumName(type_name: string) string {
 
 fn getOperatorEnumName(operator_name: string) !string {
     var buf: [256]u8 = undefined;
-    //const nnn = toSnakeCase(operator_name_map.get(operator_name).?, &buf);
-    return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_OP_{s}", .{std.ascii.upperString(&buf, operator_name)}) catch unreachable;
+    const nnn = toSnakeCase(operator_name_map.get(operator_name).?, &buf);
+    return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_OP_{s}", .{std.ascii.upperString(&buf, nnn)}) catch unreachable;
 }
 
 fn getVariantTypeName(class_name: string) string {
