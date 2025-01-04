@@ -271,9 +271,9 @@ fn getOperatorEnumName(operator_name: string) !string {
 fn getVariantTypeName(class_name: string) string {
     var buf: [256]u8 = undefined;
     var nnn = toSnakeCase(class_name, &buf);
-    if (std.mem.eql(u8, "Transform3_D", nnn)) {
+    if (std.mem.eql(u8, "transform3_d", nnn)) {
         nnn = "TRANSFORM_3D";
-    } else if (std.mem.eql(u8, "Transform2_D", nnn)) {
+    } else if (std.mem.eql(u8, "transform2_d", nnn)) {
         nnn = "TRANSFORM_2D";
     }
     return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_TYPE_{s}", .{std.ascii.upperString(&buf, nnn)}) catch unreachable;
