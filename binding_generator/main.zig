@@ -270,8 +270,13 @@ fn getOperatorEnumName(operator_name: string) !string {
 
 fn getVariantTypeName(class_name: string) string {
     var buf: [256]u8 = undefined;
-    //const nnn = toSnakeCase(class_name, &buf);
-    return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_TYPE_{s}", .{std.ascii.upperString(&buf, class_name)}) catch unreachable;
+    var nnn = toSnakeCase(class_name, &buf);
+    if (std.mem.eql(u8, "Transform3_D", nnn)) {
+        nnn = "TRANSFORM_3D";
+    } else if (std.mem.eql(u8, "Transform2_D", nnn)) {
+        nnn = "TRANSFORM_2D";
+    }
+    return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_TYPE_{s}", .{std.ascii.upperString(&buf, nnn)}) catch unreachable;
 }
 
 fn addDependType(type_name: string) !void {
