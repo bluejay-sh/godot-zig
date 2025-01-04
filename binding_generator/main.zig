@@ -125,11 +125,11 @@ const native_type_map = std.StaticStringMap(void).initComptime(.{
 const operator_name_map = std.StaticStringMap(string).initComptime(.{
     // Comparison
     .{ "==", "equal" },
-    .{ "!=", "not equal" },
+    .{ "!=", "not_equal" },
     .{ "<", "less" },
-    .{ "<=", "less equal" },
+    .{ "<=", "less_equal" },
     .{ ">", "greater" },
-    .{ ">=", "greater equal" },
+    .{ ">=", "greater_equal" },
     // Mathematic
     .{ "+", "add" },
     .{ "-", "subtract" },
@@ -140,11 +140,11 @@ const operator_name_map = std.StaticStringMap(string).initComptime(.{
     .{ "%", "module" },
     .{ "**", "power" },
     // Bitwise
-    .{ "<<", "shift left" },
-    .{ ">>", "shift right" },
-    .{ "&", "bit and" },
-    .{ "|", "bit or" },
-    .{ "~", "bit negate" },
+    .{ "<<", "shift_left" },
+    .{ ">>", "shift_right" },
+    .{ "&", "bit_and" },
+    .{ "|", "bit_or" },
+    .{ "~", "bit_negate" },
     // Logic
     .{ "and", "and" },
     .{ "or", "or" },
@@ -264,8 +264,8 @@ fn getEnumName(type_name: string) string {
 
 fn getOperatorEnumName(operator_name: string) !string {
     var buf: [256]u8 = undefined;
-    const nnn = toSnakeCase(operator_name_map.get(operator_name).?, &buf);
-    return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_OP_{s}", .{std.ascii.upperString(&buf, nnn)}) catch unreachable;
+    //const nnn = toSnakeCase(operator_name_map.get(operator_name).?, &buf);
+    return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_OP_{s}", .{std.ascii.upperString(&buf, operator_name_map.get(operator_name).?)}) catch unreachable;
 }
 
 fn getVariantTypeName(class_name: string) string {
